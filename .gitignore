@@ -1,0 +1,23 @@
+# api/.gitignore
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables
+#.env*
+
+# Django
+*.log
+staticfiles/
+mediafiles/
+
+# IDE / OS files
+.idea/
+.vscode/
+*.DS_Store
+Thumbs.db
