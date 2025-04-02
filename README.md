@@ -32,7 +32,7 @@ This is the easiest way to run the full application stack (Frontend, Backend, Da
     * This will build images and start containers for the frontend, backend, and database.
 5.  **Access Application:** The API is typically accessed via the frontend at `http://localhost:3000`. You can test the health check directly at `http://localhost:8000/api/health/`.
 
-
+### 🗂 Project Directory Layout
 project-workspace/
 ├── frontend/            <-- Cloned frontend repo (git clone ... frontend)
 │   └── ...
