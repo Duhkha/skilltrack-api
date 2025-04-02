@@ -40,7 +40,12 @@ This is the easiest way to run the full application stack (Frontend, Backend, Da
     │   └── ...
     └── docker-compose.yml   <-- The file that runs everything
 
+### 👤 Test User Credentials
 
+For testing purposes, the backend includes a hardcoded user:
+
+    Username: testuser
+    Password: testpassword123
 
 ## Available Scripts (Local)
 
