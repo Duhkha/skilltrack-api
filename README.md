@@ -33,12 +33,14 @@ This is the easiest way to run the full application stack (Frontend, Backend, Da
 5.  **Access Application:** The API is typically accessed via the frontend at `http://localhost:3000`. You can test the health check directly at `http://localhost:8000/api/health/`.
 
 ### 🗂 Project Directory Layout
-project-workspace/
-├── frontend/            <-- Cloned frontend repo (git clone ... frontend)
-│   └── ...
-├── api/                 <-- Cloned backend repo (git clone ... api)
-│   └── ...
-└── docker-compose.yml   <-- The file that runs everything
+    project-workspace/
+    ├── frontend/            <-- Cloned frontend repo (git clone ... frontend)
+    │   └── ...
+    ├── api/                 <-- Cloned backend repo (git clone ... api)
+    │   └── ...
+    └── docker-compose.yml   <-- The file that runs everything
+
+
 
 ## Available Scripts (Local)
 
