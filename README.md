@@ -1,4 +1,4 @@
-# Career Progression App - Backend API
+# Career Progression App - Backend
 
 This is the Django REST Framework API for the Progression application.
 
@@ -18,10 +18,10 @@ This is the easiest way to run the full application stack (Frontend, Backend, Da
     mkdir project-workspace
     cd project-workspace
     ```
-2.  **Clone Repositories:** Clone both the frontend and backend repositories **inside** the workspace folder. Make sure they are named `frontend` and `api`.
+2.  **Clone Repositories:** Clone both the frontend and backend repositories **inside** the workspace folder. Make sure they are named `frontend` and `backend`.
     ```bash
     git clone https://github.com/amarnuhovicbt/career-progression-web.git frontend
-    git clone https://github.com/amarnuhovicbt/career-progression-api.git api
+    git clone https://github.com/amarnuhovicbt/career-progression-api.git backend
     ```
 3.  **Add `docker-compose.yml`:** Get the `docker-compose.yml` file (see content below) and place it directly inside your `project-workspace` folder.
 4.  **Run Docker Compose:** Navigate **back up** to the `project-workspace` directory (the one containing `docker-compose.yml`). Run:
@@ -30,20 +30,20 @@ This is the easiest way to run the full application stack (Frontend, Backend, Da
     ```
     - The `--build` flag is needed the first time or if Dockerfiles change.
     - This will build images and start containers for the frontend, backend, and database.
-5.  **Access Application:** The API is typically accessed via the frontend at `http://localhost:3000`. You can test the health check directly at `http://localhost:8000/api/health/`.
+5.  **Access Application:** The backend is typically accessed via the frontend at `http://localhost:3000`.
 
 ### 🗂 Project Directory Layout
 
     project-workspace/
     ├── frontend/            <-- Cloned frontend repo (git clone ... frontend)
     │   └── ...
-    ├── backend/                 <-- Cloned backend repo (git clone ... api)
+    ├── backend/                 <-- Cloned backend repo (git clone ... backend)
     │   └── ...
     └── docker-compose.yml   <-- The file that runs everything
 
 ## Available Scripts (Local)
 
-- `cd api`
+- `cd backend`
 - `python -m venv venv`
 - `.\venv\Scripts\Activate.ps1`
 - `pip install -r requirements.txt` - if not already
