@@ -38,7 +38,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost").split(",")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "accounts.authentication.CookieJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -52,6 +52,10 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(
         minutes=int(os.getenv("REFRESH_TOKEN_LIFETIME", 1440))
     ),
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_COOKIE_SECURE": os.getenv("AUTH_COOKIE_SECURE", "True") == "True",
+    "AUTH_COOKIE_HTTP_ONLY": True,
+    "AUTH_COOKIE_SAMESITE": "Lax",
 }
 
 
@@ -65,6 +69,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "accounts",
 ]
@@ -111,8 +116,12 @@ DATABASES = {
         "NAME": os.getenv("DB_NAME", BASE_DIR / "db.sqlite3"),
         "USER": os.getenv("DB_USER", ""),
         "PASSWORD": os.getenv("DB_PASSWORD", ""),
-        "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "5432"),
+        "HOST": os.getenv("DB_HOST", ""),
+        "PORT": (
+            int(os.getenv("DB_PORT", 5432))
+            if os.getenv("DB_ENGINE") == "django.db.backends.postgresql"
+            else ""
+        ),
     }
 }
 
@@ -159,4 +168,4 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
-CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "True") == "True"
+CORS_ALLOW_CREDENTIALS = True

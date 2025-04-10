@@ -1,8 +1,14 @@
 asgiref==3.8.1
+black==25.1.0
+click==8.1.8
 Django==5.2
 django-cors-headers==4.7.0
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
+mypy-extensions==1.0.0
+packaging==24.2
+pathspec==0.12.1
+platformdirs==4.3.7
 psycopg2-binary==2.9.10
 PyJWT==2.9.0
 python-dotenv==1.1.0

@@ -120,3 +120,77 @@ networks:
 volumes:
   postgres-data:
 ```
+
+# Code Formatting with `black`
+
+To ensure consistent code style, we use the `black` code formatter. This project already has `black` configured. This guide explains how to use the existing setup and how it works.
+
+## Black Installation Status
+
+`black` is already included in the `requirements.txt` file for the project. When you set up the project environment, you should have installed it along with other dependencies.
+
+1. **If You Need to Activate the Virtual Environment:**
+   Navigate to the `backend` directory and activate your virtual environment.
+
+2. **If You Need to Reinstall Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Using the Configured Black Formatter
+
+Black is already configured for this project. Here's how to use it:
+
+### Format All Files:
+
+To format all Python files in your project, simply run the following command in the root of the backend directory:
+
+```bash
+black .
+```
+
+This will recursively format all Python files in the directory and its subdirectories.
+
+### Format a Specific File:
+
+If you only want to format a specific file (e.g., urls.py), you can specify the path to that file:
+
+```bash
+black ./accounts/urls.py
+```
+
+## Current Black Configuration
+
+Black is already configured through the project's pyproject.toml file. Black uses these settings automatically when formatting your code.
+
+## VSCode Integration
+
+For the best development experience, it would be a good idea to install the Black formatter extension in VSCode.
+
+### Install the Black Formatter Extension:
+
+1. Open VSCode
+2. Go to the Extensions tab (or press Ctrl + Shift + X)
+3. Search for "Black Formatter" and install the extension provided by ms-python
+
+### Configure VSCode User Settings:
+
+To enable automatic formatting on save, you'll need to update your VSCode user settings:
+
+1. Open Command Palette (Ctrl + Shift + P)
+2. Type "Preferences: Open Settings (JSON)" and select it
+3. In the settings file, add the following configuration:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  }
+}
+```
+
+This configuration does two things:
+
+- It enables format on save, so your Python files will be automatically formatted when you save them
+- It sets Black Formatter as the default Python formatter
