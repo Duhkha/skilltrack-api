@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from accounts.models import User
+from accounts.models import Permission, PermissionGroup, Role, User
 
 
 class SignUpSerializer(serializers.ModelSerializer):
@@ -100,9 +100,130 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
 
+        role = self.user.role
+        grouped_permissions = self.user.get_grouped_permissions()
+
         data["user"] = {
+            "id": self.user.id,
             "name": self.user.name,
             "email": self.user.email,
+            "role": role.name if role else None,
+            "grouped-permissions": grouped_permissions,
         }
 
         return data
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = ["id", "name", "description"]
+
+
+class PermissionGroupSerializer(serializers.ModelSerializer):
+    permissions = PermissionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PermissionGroup
+        fields = ["id", "name", "description", "permissions"]
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(
+        error_messages={"blank": "Name is required.", "required": "Name is required."}
+    )
+    permission_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Permission.objects.all(),
+        write_only=True,
+        source="permissions",
+        error_messages={
+            "required": "Permission IDs are required.",
+            "does_not_exist": "One or more of the provided permissions could not be found.",
+        },
+    )
+    user_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=User.objects.all(),
+        write_only=True,
+        source="users",
+        required=False,
+        error_messages={
+            "does_not_exist": "One or more of the provided users could not be found.",
+        },
+    )
+
+    permissions = PermissionSerializer(many=True, read_only=True)
+    users = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Role
+        fields = ["id", "name", "permission_ids", "user_ids", "permissions", "users"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.context.get("request") and self.context["request"].method in [
+            "PUT",
+            "PATCH",
+        ]:
+            self.fields["name"].required = False
+            self.fields["permission_ids"].required = False
+
+    def validate_name(self, value):
+        if len(value) > 100:
+            raise serializers.ValidationError(
+                "Name cannot be longer than 100 characters."
+            )
+        if self.instance:
+            if (
+                Role.role_exists(value)
+                and Role.role_exists_by_id(self.instance.id) is False
+            ):
+                raise serializers.ValidationError("Role with this name already exists.")
+        else:
+            if Role.role_exists(value):
+                raise serializers.ValidationError("Role with this name already exists.")
+
+        return value
+
+    def get_users(self, obj):
+        users = obj.get_users().select_related("role")
+
+        return [
+            {"id": user.id, "name": user.name, "email": user.email} for user in users
+        ]
+
+    def create(self, validated_data):
+        permissions = validated_data.pop("permissions", [])
+        users = validated_data.pop("users", [])
+
+        role = Role.objects.create(**validated_data)
+
+        role.permissions.set(permissions)
+
+        for user in users:
+            user.role = role
+            user.save()
+
+        return role
+
+    def update(self, instance, validated_data):
+        permissions = validated_data.pop("permissions", None)
+        users = validated_data.pop("users", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if permissions is not None:
+            instance.permissions.set(permissions)
+
+        if users is not None:
+            User.objects.filter(role=instance).update(role=None)
+
+            for user in users:
+                user.role = instance
+                user.save()
+
+        instance.save()
+        return instance

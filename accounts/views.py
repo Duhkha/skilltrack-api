@@ -1,18 +1,24 @@
 from django.conf import settings
-from rest_framework import generics, status
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.views import TokenObtainPairView
+from django.http import Http404
+from rest_framework import generics, status, viewsets
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.exceptions import NotFound
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication
-from accounts.models import User
+from rest_framework_simplejwt.views import TokenObtainPairView
+from accounts.models import Permission, PermissionGroup, Role, User
 from accounts.serializers import (
-    SignUpSerializer,
-    SignInSerializer,
     CustomTokenObtainPairSerializer,
+    SignInSerializer,
+    SignUpSerializer,
+    PermissionGroupSerializer,
+    PermissionSerializer,
+    RoleSerializer,
 )
+from accounts.permissions import HasRolePermission
 
 
 class SignUpView(generics.CreateAPIView):
@@ -118,7 +124,16 @@ class CurrentUserView(generics.RetrieveAPIView):
     def get(self, request):
         user = request.user
 
-        return Response({"name": user.name, "email": user.email})
+        grouped_permissions = user.get_grouped_permissions()
+
+        return Response(
+            {
+                "name": user.name,
+                "email": user.email,
+                "role": user.role.name if user.role else None,
+                "grouped-permissions": grouped_permissions,
+            }
+        )
 
 
 class SignOutView(APIView):
@@ -142,3 +157,109 @@ class SignOutView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return response
+
+
+class PermissionGroupListView(generics.ListAPIView):
+    queryset = PermissionGroup.objects.all()
+    serializer_class = PermissionGroupSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class PermissionListView(generics.ListAPIView):
+    queryset = Permission.objects.all()
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class PermissionListByGroupView(generics.ListAPIView):
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        group_id = self.kwargs.get("group_id")
+        group = PermissionGroup.get_by_id(group_id)
+
+        if not group:
+            raise NotFound("Permission group not found.")
+
+        return group.get_permissions()
+
+
+class PermissionDetailView(generics.RetrieveAPIView):
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        permission_id = self.kwargs.get("permission_id")
+        permission = Permission.get_by_id(permission_id)
+
+        if not permission:
+            raise NotFound("Permission not found.")
+
+        return permission
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        permissions = []
+
+        if self.action in ["list", "retrieve"]:
+            permissions = [HasRolePermission(permission="view_role")]
+        elif self.action == "create":
+            permissions = [HasRolePermission(permission="create_role")]
+        elif self.action == "update":
+            permissions = [HasRolePermission(permission="update_role")]
+        elif self.action == "destroy":
+            permissions = [HasRolePermission(permission="delete_role")]
+
+        return permissions
+
+    def get_object(self):
+        try:
+            role = super().get_object()
+
+            return role
+        except Http404:
+            raise NotFound(detail="Role not found.")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        role = self.get_object()
+        serializer = self.get_serializer(role)
+
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            role = serializer.save()
+
+            return Response(self.get_serializer(role).data, status=201)
+
+        return Response(serializer.errors, status=400)
+
+    def update(self, request, *args, **kwargs):
+        role = self.get_object()
+
+        serializer = self.get_serializer(role, data=request.data, partial=False)
+        if serializer.is_valid():
+            role = serializer.save()
+
+            return Response(self.get_serializer(role).data)
+
+        return Response(serializer.errors, status=400)
+
+    def destroy(self, request, *args, **kwargs):
+        role = self.get_object()
+        role.delete()
+
+        return Response({"detail": "Role deleted successfully."}, status=204)

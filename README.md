@@ -41,7 +41,7 @@ This is the easiest way to run the full application stack (Frontend, Backend, Da
     │   └── ...
     └── docker-compose.yml   <-- The file that runs everything
 
-## Available Scripts (Local)
+### Available Scripts (Local)
 
 - `cd backend`
 - `python -m venv venv`
@@ -49,7 +49,7 @@ This is the easiest way to run the full application stack (Frontend, Backend, Da
 - `pip install -r requirements.txt` - if not already
 - `python manage.py runserver 0.0.0.0:8000`
 
-## Docker Compose File (`docker-compose.yml`)
+### Docker Compose File (`docker-compose.yml`)
 
 This file should be placed in the parent `project-workspace` directory.
 
@@ -67,7 +67,7 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
     ports:
-      - "5433:5432"
+      - "5432:5432"
     networks:
       - skillapp-network
 
@@ -121,11 +121,27 @@ volumes:
   postgres-data:
 ```
 
-# Code Formatting with `black`
+## Seed Initial Data (Recommended):
+
+After the containers are running, you can populate the database with initial roles, permissions, and test users using the following command:
+
+```bash
+docker exec -it skillapp-backend python manage.py seed_initial_data
+```
+
+## API Documentation (Swagger UI):
+
+Once the backend is running, you can access the interactive Swagger UI to explore the API at:
+
+```
+http://localhost:8000/swagger/
+```
+
+## Code Formatting with `black`
 
 To ensure consistent code style, we use the `black` code formatter. This project already has `black` configured. This guide explains how to use the existing setup and how it works.
 
-## Black Installation Status
+### Black Installation Status
 
 `black` is already included in the `requirements.txt` file for the project. When you set up the project environment, you should have installed it along with other dependencies.
 
@@ -137,7 +153,7 @@ To ensure consistent code style, we use the `black` code formatter. This project
    pip install -r requirements.txt
    ```
 
-## Using the Configured Black Formatter
+### Using the Configured Black Formatter
 
 Black is already configured for this project. Here's how to use it:
 
@@ -159,11 +175,11 @@ If you only want to format a specific file (e.g., urls.py), you can specify the 
 black ./accounts/urls.py
 ```
 
-## Current Black Configuration
+### Current Black Configuration
 
 Black is already configured through the project's pyproject.toml file. Black uses these settings automatically when formatting your code.
 
-## VSCode Integration
+### VSCode Integration
 
 For the best development experience, it would be a good idea to install the Black formatter extension in VSCode.
 
