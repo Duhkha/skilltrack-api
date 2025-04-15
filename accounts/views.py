@@ -284,6 +284,12 @@ class RoleViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(role)
 
+        has_view_permission = request.user.has_permission("view_role")
+        is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
+
+        if not has_view_permission and not is_own_role:
+            raise PermissionDenied()
+
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
