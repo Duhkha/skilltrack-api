@@ -274,6 +274,10 @@ class RoleViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         role = self.get_object()
-        role.delete()
 
+        is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
+        if is_own_role:
+            raise PermissionDenied()
+
+        role.delete()
         return Response({"detail": "Role deleted successfully."}, status=204)
