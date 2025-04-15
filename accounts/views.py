@@ -5,7 +5,7 @@ from rest_framework.authentication import BasicAuthentication, SessionAuthentica
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -128,6 +128,7 @@ class CurrentUserView(generics.RetrieveAPIView):
 
         return Response(
             {
+                "id": user.id,
                 "name": user.name,
                 "email": user.email,
                 "role": user.role.name if user.role else None,
@@ -207,11 +208,13 @@ class RoleViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         permissions = []
 
-        if self.action in ["list", "retrieve"]:
+        if self.action == "list":
             permissions = [HasRolePermission(permission="view_role")]
+        elif self.action == "retrieve":
+            permissions = [IsAuthenticated()]
         elif self.action == "create":
             permissions = [HasRolePermission(permission="create_role")]
-        elif self.action == "update":
+        elif self.action in ["update", "partial_update"]:
             permissions = [HasRolePermission(permission="update_role")]
         elif self.action == "destroy":
             permissions = [HasRolePermission(permission="delete_role")]
@@ -235,6 +238,12 @@ class RoleViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         role = self.get_object()
         serializer = self.get_serializer(role)
+
+        has_view_permission = request.user.has_permission("view_role")
+        is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
+
+        if not has_view_permission and not is_own_role:
+            raise PermissionDenied()
 
         return Response(serializer.data)
 
