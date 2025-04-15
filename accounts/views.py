@@ -237,13 +237,14 @@ class RoleViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         role = self.get_object()
-        serializer = self.get_serializer(role)
 
         has_view_permission = request.user.has_permission("view_role")
         is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
 
         if not has_view_permission and not is_own_role:
             raise PermissionDenied()
+
+        serializer = self.get_serializer(role)
 
         return Response(serializer.data)
 
@@ -258,6 +259,10 @@ class RoleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         role = self.get_object()
+
+        is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
+        if is_own_role:
+            raise PermissionDenied()
 
         serializer = self.get_serializer(role, data=request.data, partial=False)
         if serializer.is_valid():
