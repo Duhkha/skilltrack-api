@@ -290,6 +290,8 @@ class RoleViewSet(viewsets.ModelViewSet):
         if not has_view_permission and not is_own_role:
             raise PermissionDenied()
 
+        serializer = self.get_serializer(role)
+
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
