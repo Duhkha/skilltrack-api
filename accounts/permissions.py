@@ -1,7 +1,7 @@
 from rest_framework.permissions import BasePermission
 
 
-class HasRolePermission(BasePermission):
+class HasPermission(BasePermission):
     def __init__(self, permission):
         self.permission = permission
 

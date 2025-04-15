@@ -18,7 +18,7 @@ from accounts.serializers import (
     PermissionSerializer,
     RoleSerializer,
 )
-from accounts.permissions import HasRolePermission
+from accounts.permissions import HasPermission
 
 
 class SignUpView(generics.CreateAPIView):
@@ -209,15 +209,15 @@ class RoleViewSet(viewsets.ModelViewSet):
         permissions = []
 
         if self.action == "list":
-            permissions = [HasRolePermission(permission="view_role")]
+            permissions = [HasPermission(permission="view_role")]
         elif self.action == "retrieve":
             permissions = [IsAuthenticated()]
         elif self.action == "create":
-            permissions = [HasRolePermission(permission="create_role")]
+            permissions = [HasPermission(permission="create_role")]
         elif self.action in ["update", "partial_update"]:
-            permissions = [HasRolePermission(permission="update_role")]
+            permissions = [HasPermission(permission="update_role")]
         elif self.action == "destroy":
-            permissions = [HasRolePermission(permission="delete_role")]
+            permissions = [HasPermission(permission="delete_role")]
 
         return permissions
 
@@ -238,8 +238,11 @@ class RoleViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         role = self.get_object()
 
+        if not hasattr(request.user, "role") or request.user.role is None:
+            raise PermissionDenied("User has no assigned role.")
+
         has_view_permission = request.user.has_permission("view_role")
-        is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
+        is_own_role = request.user.role.id == role.id
 
         if not has_view_permission and not is_own_role:
             raise PermissionDenied()
