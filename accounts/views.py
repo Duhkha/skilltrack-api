@@ -208,9 +208,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         permissions = []
 
-        if self.action == "list":
-            permissions = [HasPermission(permission="view_role")]
-        elif self.action == "retrieve":
+        if self.action in ["list", "retrieve"]:
             permissions = [IsAuthenticated()]
         elif self.action == "create":
             permissions = [HasPermission(permission="create_role")]
@@ -230,7 +228,16 @@ class RoleViewSet(viewsets.ModelViewSet):
             raise NotFound(detail="Role not found.")
 
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        has_view_permission = request.user.has_permission("view_role")
+
+        if has_view_permission:
+            queryset = self.get_queryset()
+        else:
+            if hasattr(request.user, "role") and request.user.role is not None:
+                queryset = Role.objects.filter(id=request.user.role.id)
+            else:
+                queryset = Role.objects.none()
+
         serializer = self.get_serializer(queryset, many=True)
 
         return Response(serializer.data)
