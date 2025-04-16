@@ -175,7 +175,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_grouped_permissions(self):
         if self.role:
             return self.role.get_grouped_permissions()
-        return {}
+        return []
 
     def has_permission(self, permission_name):
         if self.role:
