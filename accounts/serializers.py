@@ -175,15 +175,14 @@ class RoleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Name cannot be longer than 100 characters."
             )
-        if self.instance:
-            if (
-                Role.role_exists(value)
-                and Role.role_exists_by_id(self.instance.id) is False
-            ):
-                raise serializers.ValidationError("Role with this name already exists.")
-        else:
-            if Role.role_exists(value):
-                raise serializers.ValidationError("Role with this name already exists.")
+
+        existing_role = (
+            Role.objects.filter(name=value)
+            .exclude(id=getattr(self.instance, "id", None))
+            .first()
+        )
+        if existing_role:
+            raise serializers.ValidationError("Role with this name already exists.")
 
         return value
 
