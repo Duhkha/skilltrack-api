@@ -226,3 +226,11 @@ class RoleSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+
+class UserSerializer(serializers.ModelSerializer):
+    role = serializers.StringRelatedField()
+
+    class Meta:
+        model = User
+        fields = ["id", "name", "email", "role"]

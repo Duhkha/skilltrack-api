@@ -38,6 +38,31 @@ class Command(BaseCommand):
                     self.style.SUCCESS(f"Created permission: {permission_name}")
                 )
 
+        users_group, created = PermissionGroup.objects.get_or_create(
+            name="users",
+            defaults={"description": "Permissions related to user management."},
+        )
+        if created:
+            self.stdout.write(self.style.SUCCESS("Created permission group: users"))
+
+        user_permissions_data = [
+            (
+                "view_user",
+                "Permission to view users, including listing all users and retrieving individual user details.",
+            ),
+        ]
+
+        for permission_name, description in user_permissions_data:
+            permission, created = Permission.objects.get_or_create(
+                group=users_group,
+                name=permission_name,
+                defaults={"description": description},
+            )
+            if created:
+                self.stdout.write(
+                    self.style.SUCCESS(f"Created permission: {permission_name}")
+                )
+
         admin_role, created = Role.objects.get_or_create(name="admin")
         all_permissions = Permission.objects.all()
         admin_role.permissions.set(all_permissions)

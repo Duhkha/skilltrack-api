@@ -17,6 +17,7 @@ from accounts.serializers import (
     PermissionGroupSerializer,
     PermissionSerializer,
     RoleSerializer,
+    UserSerializer,
 )
 from accounts.permissions import HasPermission
 
@@ -300,3 +301,46 @@ class RoleViewSet(viewsets.ModelViewSet):
 
         role.delete()
         return Response({"detail": "Role deleted successfully."}, status=204)
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.select_related("role").all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        permissions = []
+
+        if self.action == "list":
+            permissions = [HasPermission(permission="view_user")]
+        elif self.action == "retrieve":
+            permissions = [IsAuthenticated()]
+
+        return permissions
+
+    def get_object(self):
+        try:
+            user = super().get_object()
+
+            return user
+        except Http404:
+            raise NotFound(detail="User not found.")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset().exclude(id=request.user.id)
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        user = self.get_object()
+
+        has_view_permission = request.user.has_permission("view_user")
+        is_self = request.user.id == user.id
+
+        if not has_view_permission and not is_self:
+            raise PermissionDenied()
+
+        serializer = self.get_serializer(user)
+
+        return Response(serializer.data)

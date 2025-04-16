@@ -11,10 +11,12 @@ from accounts.views import (
     PermissionListByGroupView,
     PermissionDetailView,
     RoleViewSet,
+    UserViewSet,
 )
 
 router = DefaultRouter()
 router.register(r"roles", RoleViewSet, basename="role")
+router.register(r"users", UserViewSet, basename="user")
 
 urlpatterns = [
     path("auth/sign-up/", SignUpView.as_view(), name="sign-up"),
