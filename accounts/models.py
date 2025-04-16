@@ -86,22 +86,26 @@ class Role(models.Model):
         grouped_permissions = []
 
         for permission in self.permissions.select_related("group"):
-            group_name = permission.group.name
+            group = permission.group
 
             group_entry = next(
                 (
                     entry
                     for entry in grouped_permissions
-                    if entry["group"] == group_name
+                    if entry["group"] == group.name
                 ),
                 None,
             )
             if not group_entry:
-                group_entry = {"group": group_name, "permissions": []}
+                group_entry = {"id": group.id, "group": group.name, "permissions": []}
                 grouped_permissions.append(group_entry)
 
             group_entry["permissions"].append(
-                {"name": permission.name, "description": permission.description}
+                {
+                    "id": permission.id,
+                    "name": permission.name,
+                    "description": permission.description,
+                }
             )
 
         return grouped_permissions

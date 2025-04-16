@@ -108,7 +108,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             "name": self.user.name,
             "email": self.user.email,
             "role": role.name if role else None,
-            "grouped-permissions": grouped_permissions,
+            "groupedPermissions": grouped_permissions,
         }
 
         return data

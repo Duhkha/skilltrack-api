@@ -132,7 +132,7 @@ class CurrentUserView(generics.RetrieveAPIView):
                 "name": user.name,
                 "email": user.email,
                 "role": user.role.name if user.role else None,
-                "grouped-permissions": grouped_permissions,
+                "groupedPermissions": grouped_permissions,
             }
         )
 
