@@ -279,6 +279,10 @@ class RoleViewSet(viewsets.ModelViewSet):
         if is_own_role:
             raise PermissionDenied()
 
+        user_ids = request.data.get("user_ids")
+        if user_ids and str(request.user.id) in map(str, user_ids):
+            raise PermissionDenied()
+
         serializer = self.get_serializer(role, data=request.data, partial=False)
         if serializer.is_valid():
             role = serializer.save()
