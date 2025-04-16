@@ -352,6 +352,10 @@ class RoleViewSet(viewsets.ModelViewSet):
             if superuser_ids:
                 raise PermissionDenied("Cannot assign roles to superusers.")
 
+        user_ids = request.data.get("user_ids")
+        if user_ids and str(request.user.id) in map(str, user_ids):
+            raise PermissionDenied()
+
         serializer = self.get_serializer(role, data=request.data, partial=False)
         if serializer.is_valid():
             role = serializer.save()
