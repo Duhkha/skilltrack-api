@@ -227,15 +227,22 @@ class RoleViewSet(viewsets.ModelViewSet):
             raise NotFound("Role not found.")
 
     def list(self, request, *args, **kwargs):
-        has_view_permission = request.user.has_permission("view_role")
-
-        if has_view_permission:
+        if request.user.is_superuser:
             queryset = self.get_queryset()
         else:
-            if hasattr(request.user, "role") and request.user.role is not None:
-                queryset = Role.objects.filter(id=request.user.role.id)
+            has_view_permission = request.user.has_permission("view_role")
+
+            if has_view_permission:
+                superuser_ids = User.objects.filter(is_superuser=True).values_list(
+                    "id", flat=True
+                )
+
+                queryset = self.get_queryset().exclude(user__id__in=superuser_ids)
             else:
-                queryset = Role.objects.none()
+                if hasattr(request.user, "role") and request.user.role is not None:
+                    queryset = Role.objects.filter(id=request.user.role.id)
+                else:
+                    queryset = Role.objects.none()
 
         serializer = self.get_serializer(queryset, many=True)
 
