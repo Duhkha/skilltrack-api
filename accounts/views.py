@@ -378,13 +378,29 @@ class UserViewSet(viewsets.ModelViewSet):
             raise NotFound("User not found.")
 
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset().exclude(id=request.user.id)
+        if request.user.is_superuser:
+            queryset = self.get_queryset().exclude(id=request.user.id)
+        else:
+            queryset = (
+                self.get_queryset()
+                .exclude(id=request.user.id)
+                .exclude(is_superuser=True)
+            )
+
         serializer = self.get_serializer(queryset, many=True)
 
         return Response(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):
         user = self.get_object()
+
+        if request.user.is_superuser:
+            serializer = self.get_serializer(user)
+
+            return Response(serializer.data)
+
+        if user.is_superuser and not request.user.is_superuser:
+            raise PermissionDenied("You do not have permission to view this user.")
 
         has_view_permission = request.user.has_permission("view_user")
         is_self = request.user.id == user.id
