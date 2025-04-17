@@ -439,19 +439,6 @@ class UserViewSet(viewsets.ModelViewSet):
         except Http404:
             raise NotFound("User not found.")
 
-    def list(self, request, *args, **kwargs):
-        if request.user.is_superuser:
-            queryset = self.get_queryset().exclude(id=request.user.id)
-        else:
-            queryset = (
-                self.get_queryset()
-                .exclude(id=request.user.id)
-                .exclude(is_superuser=True)
-            )
-
-        serializer = self.get_serializer(queryset, many=True)
-
-        return Response(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):
         user = self.get_object()
