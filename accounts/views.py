@@ -296,8 +296,17 @@ class RoleViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You cannot update your own role.")
 
         user_ids = request.data.get("user_ids")
-        if user_ids and str(request.user.id) in map(str, user_ids):
-            raise PermissionDenied("You cannot assign roles to yourself.")
+        if user_ids:
+            if str(request.user.id) in map(str, user_ids):
+                raise PermissionDenied("You cannot assign roles to yourself.")
+
+            superuser_ids = list(
+                User.objects.filter(id__in=user_ids, is_superuser=True).values_list(
+                    "id", flat=True
+                )
+            )
+            if superuser_ids:
+                raise PermissionDenied("Cannot assign roles to superusers.")
 
         serializer = self.get_serializer(role, data=request.data, partial=False)
         if serializer.is_valid():
