@@ -32,11 +32,33 @@ class PermissionGroup(models.Model):
     def __str__(self):
         return self.name
 
+    def has_permission(self, name):
+        return self.permissions.filter(name=name).exists()
+
+    def has_permissions(self, names):
+        return all(self.has_permission(name) for name in names)
+
+    def get_permission(self, name):
+        return self.permissions.filter(name=name).first()
+
     def get_permissions(self):
         return self.permissions.all()
 
-    def has_permission(self, permission_name):
-        return self.permissions.filter(name=permission_name).exists()
+    @classmethod
+    def exists_by_id(cls, id):
+        return cls.objects.filter(id=id).exists()
+
+    @classmethod
+    def exists_in_ids(cls, ids):
+        return cls.objects.filter(id__in=ids).exists()
+
+    @classmethod
+    def exists_by_name(cls, name):
+        return cls.objects.filter(name=name).exists()
+
+    @classmethod
+    def exists_in_names(cls, names):
+        return cls.objects.filter(name__in=names).exists()
 
     @classmethod
     def get_by_id(cls, id):
@@ -45,6 +67,22 @@ class PermissionGroup(models.Model):
     @classmethod
     def get_by_ids(cls, ids):
         return cls.objects.filter(id__in=ids)
+
+    @classmethod
+    def get_by_name(cls, name):
+        return cls.objects.filter(name=name).first()
+
+    @classmethod
+    def get_by_names(cls, names):
+        return cls.objects.filter(name__in=names)
+
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()
 
 
 class Permission(models.Model):
@@ -61,12 +99,60 @@ class Permission(models.Model):
         return self.group.name
 
     @classmethod
+    def exists_by_id(cls, id):
+        return cls.objects.filter(id=id).exists()
+
+    @classmethod
+    def exists_in_ids(cls, ids):
+        return cls.objects.filter(id__in=ids).exists()
+
+    @classmethod
+    def exists_by_name(cls, name):
+        return cls.objects.filter(name=name).exists()
+
+    @classmethod
+    def exists_in_names(cls, names):
+        return cls.objects.filter(name__in=names).exists()
+
+    @classmethod
+    def exists_in_group(cls, group):
+        return cls.objects.filter(group=group).exists()
+
+    @classmethod
+    def exists_in_groups(cls, groups):
+        return cls.objects.filter(group__in=groups).exists()
+
+    @classmethod
     def get_by_id(cls, id):
         return cls.objects.filter(id=id).first()
 
     @classmethod
     def get_by_ids(cls, ids):
         return cls.objects.filter(id__in=ids)
+
+    @classmethod
+    def get_by_name(cls, name):
+        return cls.objects.filter(name=name).first()
+
+    @classmethod
+    def get_by_names(cls, names):
+        return cls.objects.filter(name__in=names)
+
+    @classmethod
+    def get_by_group(cls, group):
+        return cls.objects.filter(group=group)
+
+    @classmethod
+    def get_by_groups(cls, groups):
+        return cls.objects.filter(group__in=groups)
+
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()
 
 
 class Role(models.Model):
@@ -76,11 +162,23 @@ class Role(models.Model):
     def __str__(self):
         return self.name
 
+    def has_permission(self, name):
+        return self.permissions.filter(name=name).exists()
+
+    def has_permissions(self, names):
+        return all(self.has_permission(name) for name in names)
+
+    def get_permission(self, name):
+        return self.permissions.filter(name=name).first()
+
     def get_permissions(self):
         return self.permissions.all()
 
-    def get_permissions_by_group(self, group_name):
-        return self.permissions.filter(group__name=group_name)
+    def get_permissions_by_group(self, name):
+        return self.permissions.filter(group=name)
+
+    def get_permissions_by_groups(self, names):
+        return self.permissions.filter(group__in=names)
 
     def get_grouped_permissions(self):
         grouped_permissions = []
@@ -96,6 +194,7 @@ class Role(models.Model):
                 ),
                 None,
             )
+
             if not group_entry:
                 group_entry = {"id": group.id, "group": group.name, "permissions": []}
                 grouped_permissions.append(group_entry)
@@ -110,19 +209,24 @@ class Role(models.Model):
 
         return grouped_permissions
 
-    def has_permission(self, permission_name):
-        return self.permissions.filter(name=permission_name).exists()
-
     def get_users(self):
         return User.objects.filter(role=self)
 
     @classmethod
-    def role_exists(cls, role_name):
-        return cls.objects.filter(name=role_name).exists()
+    def exists_by_id(cls, id):
+        return cls.objects.filter(id=id).exists()
 
     @classmethod
-    def role_exists_by_id(cls, role_id):
-        return cls.objects.filter(id=role_id).exists()
+    def exists_in_ids(cls, ids):
+        return cls.objects.filter(id__in=ids).exists()
+
+    @classmethod
+    def exists_by_name(cls, name):
+        return cls.objects.filter(name=name).exists()
+
+    @classmethod
+    def exists_in_names(cls, names):
+        return cls.objects.filter(name__in=names).exists()
 
     @classmethod
     def get_by_id(cls, id):
@@ -131,6 +235,22 @@ class Role(models.Model):
     @classmethod
     def get_by_ids(cls, ids):
         return cls.objects.filter(id__in=ids)
+
+    @classmethod
+    def get_by_name(cls, name):
+        return cls.objects.filter(name=name).first()
+
+    @classmethod
+    def get_by_names(cls, names):
+        return cls.objects.filter(name__in=names)
+
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -156,31 +276,68 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name = "User"
         verbose_name_plural = "Users"
 
-    def get_full_name(self):
-        return self.name
+    def __str__(self):
+        return f"{self.name} ({self.email})"
 
-    def get_short_name(self):
-        return self.name or self.email.split("@")[0]
+    def has_permission(self, name):
+        if self.role:
+            return self.role.has_permission(name)
+
+        return False
+
+    def has_permissions(self, names):
+        if self.role:
+            return self.role.has_permissions(names)
+
+        return False
+
+    def get_permission(self, name):
+        if self.role:
+            return self.role.get_permission(name)
+
+        return None
 
     def get_permissions(self):
         if self.role:
             return self.role.get_permissions()
+
         return Permission.objects.none()
 
-    def get_permissions_by_group(self, group_name):
+    def get_permissions_by_group(self, name):
         if self.role:
-            return self.role.get_permissions_by_group(group_name)
+            return self.role.get_permissions_by_group(name)
+
         return Permission.objects.none()
 
     def get_grouped_permissions(self):
         if self.role:
             return self.role.get_grouped_permissions()
+
         return []
 
-    def has_permission(self, permission_name):
-        if self.role:
-            return self.role.has_permission(permission_name)
-        return False
+    @classmethod
+    def exists_by_id(cls, id):
+        return cls.objects.filter(id=id).exists()
+
+    @classmethod
+    def exists_in_ids(cls, ids):
+        return cls.objects.filter(id__in=ids).exists()
+
+    @classmethod
+    def exists_by_email(cls, email):
+        return cls.objects.filter(email=email).exists()
+
+    @classmethod
+    def exists_in_emails(cls, emails):
+        return cls.objects.filter(email__in=emails).exists()
+
+    @classmethod
+    def exists_by_role(cls, role):
+        return cls.objects.filter(role=role).exists()
+
+    @classmethod
+    def exists_in_roles(cls, roles):
+        return cls.objects.filter(role__in=roles).exists()
 
     @classmethod
     def get_by_id(cls, id):
@@ -189,3 +346,27 @@ class User(AbstractBaseUser, PermissionsMixin):
     @classmethod
     def get_by_ids(cls, ids):
         return cls.objects.filter(id__in=ids)
+
+    @classmethod
+    def get_by_email(cls, email):
+        return cls.objects.filter(email=email).first()
+
+    @classmethod
+    def get_by_emails(cls, emails):
+        return cls.objects.filter(email__in=emails)
+
+    @classmethod
+    def get_by_role(cls, role):
+        return cls.objects.filter(role=role)
+
+    @classmethod
+    def get_by_roles(cls, roles):
+        return cls.objects.filter(role__in=roles)
+
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()

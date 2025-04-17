@@ -130,7 +130,7 @@ class RoleSerializer(serializers.ModelSerializer):
     )
     permission_ids = serializers.PrimaryKeyRelatedField(
         many=True,
-        queryset=Permission.objects.all(),
+        queryset=Permission.get_all(),
         write_only=True,
         source="permissions",
         error_messages={
@@ -140,7 +140,7 @@ class RoleSerializer(serializers.ModelSerializer):
     )
     user_ids = serializers.PrimaryKeyRelatedField(
         many=True,
-        queryset=User.objects.all(),
+        queryset=User.get_all(),
         write_only=True,
         source="users",
         required=False,
@@ -175,7 +175,7 @@ class RoleSerializer(serializers.ModelSerializer):
         existing_role = (
             Role.objects.filter(name=value)
             .exclude(id=getattr(self.instance, "id", None))
-            .first()
+            .exists()
         )
         if existing_role:
             raise serializers.ValidationError("Role with this name already exists.")

@@ -77,7 +77,7 @@ class Command(BaseCommand):
                 )
 
         admin_role, created = Role.objects.get_or_create(name="admin")
-        all_permissions = Permission.objects.all()
+        all_permissions = Permission.get_all()
         admin_role.permissions.set(all_permissions)
         admin_role.save()
 
