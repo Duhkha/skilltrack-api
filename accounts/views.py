@@ -145,9 +145,7 @@ class SignOutView(APIView):
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get("refreshToken")
 
-        response = Response(
-            {"detail": "Successfully signed out."}, status=status.HTTP_200_OK
-        )
+        response = Response(status=status.HTTP_200_OK)
 
         response.delete_cookie("accessToken")
         response.delete_cookie("refreshToken")
@@ -226,7 +224,7 @@ class RoleViewSet(viewsets.ModelViewSet):
 
             return role
         except Http404:
-            raise NotFound(detail="Role not found.")
+            raise NotFound("Role not found.")
 
     def list(self, request, *args, **kwargs):
         has_view_permission = request.user.has_permission("view_role")
@@ -253,7 +251,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         is_own_role = request.user.role.id == role.id
 
         if not has_view_permission and not is_own_role:
-            raise PermissionDenied()
+            raise PermissionDenied("You do not have permission to view this role.")
 
         serializer = self.get_serializer(role)
 
@@ -262,27 +260,29 @@ class RoleViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         user_ids = request.data.get("user_ids")
 
-        if user_ids and str(request.user.id) in map(str, user_ids):
-            raise PermissionDenied()
+        if user_ids and User.exists_in_ids([request.user.id]):
+            raise PermissionDenied("You cannot assign roles to yourself.")
 
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             role = serializer.save()
 
-            return Response(self.get_serializer(role).data, status=201)
+            return Response(
+                self.get_serializer(role).data, status=status.HTTP_201_CREATED
+            )
 
-        return Response(serializer.errors, status=400)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
         role = self.get_object()
 
         is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
         if is_own_role:
-            raise PermissionDenied()
+            raise PermissionDenied("You cannot update your own role.")
 
         user_ids = request.data.get("user_ids")
-        if user_ids and str(request.user.id) in map(str, user_ids):
-            raise PermissionDenied()
+        if user_ids and User.exists_in_ids([request.user.id]):
+            raise PermissionDenied("You cannot assign roles to yourself.")
 
         serializer = self.get_serializer(role, data=request.data, partial=False)
         if serializer.is_valid():
@@ -290,17 +290,18 @@ class RoleViewSet(viewsets.ModelViewSet):
 
             return Response(self.get_serializer(role).data)
 
-        return Response(serializer.errors, status=400)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, *args, **kwargs):
         role = self.get_object()
 
         is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
         if is_own_role:
-            raise PermissionDenied()
+            raise PermissionDenied("You cannot delete your own role.")
 
         role.delete()
-        return Response({"detail": "Role deleted successfully."}, status=204)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -324,7 +325,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
             return user
         except Http404:
-            raise NotFound(detail="User not found.")
+            raise NotFound("User not found.")
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset().exclude(id=request.user.id)
@@ -339,7 +340,7 @@ class UserViewSet(viewsets.ModelViewSet):
         is_self = request.user.id == user.id
 
         if not has_view_permission and not is_self:
-            raise PermissionDenied()
+            raise PermissionDenied("You do not have permission to view this user.")
 
         serializer = self.get_serializer(user)
 

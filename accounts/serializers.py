@@ -179,7 +179,7 @@ class RoleSerializer(serializers.ModelSerializer):
         existing_role = (
             Role.objects.filter(name=value)
             .exclude(id=getattr(self.instance, "id", None))
-            .first()
+            .exists()
         )
         if existing_role:
             raise serializers.ValidationError("Role with this name already exists.")
