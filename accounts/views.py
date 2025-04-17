@@ -270,7 +270,7 @@ class RoleViewSet(viewsets.ModelViewSet):
             all_permissions_count = Permission.count_all()
             has_all_permissions = role.permissions.count() == all_permissions_count
 
-            if user_ids and has_all_permissions:
+            if has_all_permissions and user_ids:
                 User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
 
             return Response(
@@ -293,6 +293,15 @@ class RoleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(role, data=request.data, partial=False)
         if serializer.is_valid():
             role = serializer.save()
+
+            all_permissions_count = Permission.count_all()
+            has_all_permissions = role.permissions.count() == all_permissions_count
+
+            if has_all_permissions:
+                if user_ids:
+                    User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
+                else:
+                    User.get_by_role(role).update(is_staff=True, is_superuser=True)
 
             return Response(self.get_serializer(role).data)
 
