@@ -23,7 +23,7 @@ from accounts.permissions import HasPermission
 
 
 class SignUpView(generics.CreateAPIView):
-    queryset = User.objects.all()
+    queryset = User.get_all()
     serializer_class = SignUpSerializer
     permission_classes = [AllowAny]
     authentication_classes = [SessionAuthentication, BasicAuthentication]
@@ -160,13 +160,13 @@ class SignOutView(APIView):
 
 
 class PermissionGroupListView(generics.ListAPIView):
-    queryset = PermissionGroup.objects.all()
+    queryset = PermissionGroup.get_all()
     serializer_class = PermissionGroupSerializer
     permission_classes = [IsAuthenticated]
 
 
 class PermissionListView(generics.ListAPIView):
-    queryset = Permission.objects.all()
+    queryset = Permission.get_all()
     serializer_class = PermissionSerializer
     permission_classes = [IsAuthenticated]
 
@@ -200,7 +200,7 @@ class PermissionDetailView(generics.RetrieveAPIView):
 
 
 class RoleViewSet(viewsets.ModelViewSet):
-    queryset = Role.objects.all()
+    queryset = Role.get_all()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
 
@@ -260,12 +260,18 @@ class RoleViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         user_ids = request.data.get("user_ids")
 
-        if user_ids and User.exists_in_ids([request.user.id]):
+        if user_ids and str(request.user.id) in map(str, user_ids):
             raise PermissionDenied("You cannot assign roles to yourself.")
 
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             role = serializer.save()
+
+            all_permissions_count = Permission.count_all()
+            has_all_permissions = role.permissions.count() == all_permissions_count
+
+            if user_ids and has_all_permissions:
+                User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
 
             return Response(
                 self.get_serializer(role).data, status=status.HTTP_201_CREATED
@@ -281,7 +287,7 @@ class RoleViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You cannot update your own role.")
 
         user_ids = request.data.get("user_ids")
-        if user_ids and User.exists_in_ids([request.user.id]):
+        if user_ids and str(request.user.id) in map(str, user_ids):
             raise PermissionDenied("You cannot assign roles to yourself.")
 
         serializer = self.get_serializer(role, data=request.data, partial=False)

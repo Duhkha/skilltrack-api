@@ -134,7 +134,7 @@ class RoleSerializer(serializers.ModelSerializer):
     )
     permission_ids = serializers.PrimaryKeyRelatedField(
         many=True,
-        queryset=Permission.objects.all(),
+        queryset=Permission.get_all(),
         write_only=True,
         source="permissions",
         error_messages={
@@ -144,7 +144,7 @@ class RoleSerializer(serializers.ModelSerializer):
     )
     user_ids = serializers.PrimaryKeyRelatedField(
         many=True,
-        queryset=User.objects.all(),
+        queryset=User.get_all(),
         write_only=True,
         source="users",
         required=False,

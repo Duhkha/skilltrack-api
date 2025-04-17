@@ -76,6 +76,14 @@ class PermissionGroup(models.Model):
     def get_by_names(cls, names):
         return cls.objects.filter(name__in=names)
 
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()
+
 
 class Permission(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -137,6 +145,14 @@ class Permission(models.Model):
     @classmethod
     def get_by_groups(cls, groups):
         return cls.objects.filter(group__in=groups)
+
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()
 
 
 class Role(models.Model):
@@ -227,6 +243,14 @@ class Role(models.Model):
     @classmethod
     def get_by_names(cls, names):
         return cls.objects.filter(name__in=names)
+
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -338,3 +362,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     @classmethod
     def get_by_roles(cls, roles):
         return cls.objects.filter(role__in=roles)
+
+    @classmethod
+    def get_all(cls):
+        return cls.objects.all()
+
+    @classmethod
+    def count_all(cls):
+        return cls.objects.count()
