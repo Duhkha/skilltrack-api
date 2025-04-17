@@ -251,6 +251,16 @@ class RoleViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         role = self.get_object()
 
+        if request.user.is_superuser:
+            serializer = self.get_serializer(role)
+
+            return Response(serializer.data)
+
+        has_superusers = User.objects.filter(role=role, is_superuser=True).exists()
+
+        if has_superusers:
+            raise PermissionDenied("You do not have permission to view this role.")
+
         if not hasattr(request.user, "role") or request.user.role is None:
             raise PermissionDenied("User has no assigned role.")
 
