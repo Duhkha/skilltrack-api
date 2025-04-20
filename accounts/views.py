@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.http import Http404
+from django.db import models
 from rest_framework import generics, status, viewsets
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.exceptions import AuthenticationFailed
@@ -206,6 +207,15 @@ class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
 
+    def check_all_permissions_role_exists(self):
+        all_permissions_count = Permission.count_all()
+
+        roles_with_all_permissions = Role.objects.annotate(
+            permission_count=models.Count("permissions")
+        ).filter(permission_count=all_permissions_count)
+
+        return roles_with_all_permissions.exists()
+
     def get_permissions(self):
         permissions = []
 
@@ -298,6 +308,9 @@ class RoleViewSet(viewsets.ModelViewSet):
             all_permissions_count = Permission.count_all()
             has_all_permissions = role.permissions.count() == all_permissions_count
 
+            if has_all_permissions and self.check_all_permissions_role_exists():
+                raise PermissionDenied("A role with all permissions already exists.")
+
             if has_all_permissions and user_ids:
                 User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
 
@@ -337,6 +350,9 @@ class RoleViewSet(viewsets.ModelViewSet):
 
             all_permissions_count = Permission.count_all()
             has_all_permissions = role.permissions.count() == all_permissions_count
+
+            if has_all_permissions and self.check_all_permissions_role_exists():
+                raise PermissionDenied("A role with all permissions already exists.")
 
             if has_all_permissions:
                 if user_ids:
