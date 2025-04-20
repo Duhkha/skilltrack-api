@@ -196,7 +196,12 @@ class Role(models.Model):
             )
 
             if not group_entry:
-                group_entry = {"id": group.id, "group": group.name, "permissions": []}
+                group_entry = {
+                    "id": group.id,
+                    "group": group.name,
+                    "description": group.description,
+                    "permissions": [],
+                }
                 grouped_permissions.append(group_entry)
 
             group_entry["permissions"].append(
