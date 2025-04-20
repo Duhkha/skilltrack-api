@@ -153,12 +153,19 @@ class RoleSerializer(serializers.ModelSerializer):
         },
     )
 
-    permissions = PermissionSerializer(many=True, read_only=True)
+    groupedPermissions = serializers.SerializerMethodField(read_only=True)
     users = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Role
-        fields = ["id", "name", "permission_ids", "user_ids", "permissions", "users"]
+        fields = [
+            "id",
+            "name",
+            "permission_ids",
+            "user_ids",
+            "groupedPermissions",
+            "users",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -185,6 +192,9 @@ class RoleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Role with this name already exists.")
 
         return value
+
+    def get_groupedPermissions(self, obj):
+        return obj.get_grouped_permissions()
 
     def get_users(self, obj):
         users = obj.get_users().select_related("role")
