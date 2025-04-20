@@ -145,7 +145,9 @@ class SignOutView(APIView):
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get("refreshToken")
 
-        response = Response(status=status.HTTP_200_OK)
+        response = Response(
+            {"detail": "You have successfully signed out."}, status=status.HTTP_200_OK
+        )
 
         response.delete_cookie("accessToken")
         response.delete_cookie("refreshToken")
@@ -300,7 +302,11 @@ class RoleViewSet(viewsets.ModelViewSet):
                 User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
 
             return Response(
-                self.get_serializer(role).data, status=status.HTTP_201_CREATED
+                {
+                    "detail": "Role created successfully.",
+                    "role": self.get_serializer(role).data,
+                },
+                status=status.HTTP_201_CREATED,
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -338,7 +344,13 @@ class RoleViewSet(viewsets.ModelViewSet):
                 else:
                     User.get_by_role(role).update(is_staff=True, is_superuser=True)
 
-            return Response(self.get_serializer(role).data)
+            return Response(
+                {
+                    "detail": "Role updated successfully.",
+                    "role": self.get_serializer(role).data,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -351,7 +363,9 @@ class RoleViewSet(viewsets.ModelViewSet):
 
         role.delete()
 
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"detail": "Role deleted successfully."}, status=status.HTTP_204_NO_CONTENT
+        )
 
 
 class UserViewSet(viewsets.ModelViewSet):
