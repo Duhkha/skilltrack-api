@@ -1,22 +1,30 @@
 from django.conf import settings
-from rest_framework import generics, status
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.views import TokenObtainPairView
+from django.http import Http404
+from django.db import models
+from rest_framework import generics, status, viewsets
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication
-from accounts.models import User
+from rest_framework_simplejwt.views import TokenObtainPairView
+from accounts.models import Permission, PermissionGroup, Role, User
 from accounts.serializers import (
-    SignUpSerializer,
-    SignInSerializer,
     CustomTokenObtainPairSerializer,
+    SignInSerializer,
+    SignUpSerializer,
+    PermissionGroupSerializer,
+    PermissionSerializer,
+    RoleSerializer,
+    UserSerializer,
 )
+from accounts.permissions import HasPermission
 
 
 class SignUpView(generics.CreateAPIView):
-    queryset = User.objects.all()
+    queryset = User.get_all()
     serializer_class = SignUpSerializer
     permission_classes = [AllowAny]
     authentication_classes = [SessionAuthentication, BasicAuthentication]
@@ -118,7 +126,17 @@ class CurrentUserView(generics.RetrieveAPIView):
     def get(self, request):
         user = request.user
 
-        return Response({"name": user.name, "email": user.email})
+        grouped_permissions = user.get_grouped_permissions()
+
+        return Response(
+            {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "role": user.role.name if user.role else None,
+                "groupedPermissions": grouped_permissions,
+            }
+        )
 
 
 class SignOutView(APIView):
@@ -129,7 +147,7 @@ class SignOutView(APIView):
         refresh_token = request.COOKIES.get("refreshToken")
 
         response = Response(
-            {"detail": "Successfully signed out."}, status=status.HTTP_200_OK
+            {"detail": "You have successfully signed out."}, status=status.HTTP_200_OK
         )
 
         response.delete_cookie("accessToken")
@@ -142,3 +160,284 @@ class SignOutView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return response
+
+
+class PermissionGroupListView(generics.ListAPIView):
+    queryset = PermissionGroup.get_all()
+    serializer_class = PermissionGroupSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class PermissionListView(generics.ListAPIView):
+    queryset = Permission.get_all()
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class PermissionListByGroupView(generics.ListAPIView):
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        group_id = self.kwargs.get("group_id")
+        group = PermissionGroup.get_by_id(group_id)
+
+        if not group:
+            raise NotFound("Permission group not found.")
+
+        return group.get_permissions()
+
+
+class PermissionDetailView(generics.RetrieveAPIView):
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        permission_id = self.kwargs.get("permission_id")
+        permission = Permission.get_by_id(permission_id)
+
+        if not permission:
+            raise NotFound("Permission not found.")
+
+        return permission
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    queryset = Role.get_all()
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def check_all_permissions_role_exists(self):
+        all_permissions_count = Permission.count_all()
+
+        roles_with_all_permissions = Role.objects.annotate(
+            permission_count=models.Count("permissions")
+        ).filter(permission_count=all_permissions_count)
+
+        return roles_with_all_permissions.exists()
+
+    def get_permissions(self):
+        permissions = []
+
+        if self.action in ["list", "retrieve"]:
+            permissions = [IsAuthenticated()]
+        elif self.action == "create":
+            permissions = [HasPermission(permission="create_role")]
+        elif self.action in ["update", "partial_update"]:
+            permissions = [HasPermission(permission="update_role")]
+        elif self.action == "destroy":
+            permissions = [HasPermission(permission="delete_role")]
+
+        return permissions
+
+    def get_object(self):
+        try:
+            role = super().get_object()
+
+            return role
+        except Http404:
+            raise NotFound("Role not found.")
+
+    def list(self, request, *args, **kwargs):
+        if request.user.is_superuser:
+            queryset = self.get_queryset()
+        else:
+            has_view_permission = request.user.has_permission("view_role")
+
+            if has_view_permission:
+                superuser_ids = User.objects.filter(is_superuser=True).values_list(
+                    "id", flat=True
+                )
+
+                queryset = self.get_queryset().exclude(user__id__in=superuser_ids)
+            else:
+                if hasattr(request.user, "role") and request.user.role is not None:
+                    queryset = Role.objects.filter(id=request.user.role.id)
+                else:
+                    queryset = Role.objects.none()
+
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        role = self.get_object()
+
+        if request.user.is_superuser:
+            serializer = self.get_serializer(role)
+
+            return Response(serializer.data)
+
+        has_superusers = User.objects.filter(role=role, is_superuser=True).exists()
+
+        if has_superusers:
+            raise PermissionDenied("You do not have permission to view this role.")
+
+        if not hasattr(request.user, "role") or request.user.role is None:
+            raise PermissionDenied("User has no assigned role.")
+
+        has_view_permission = request.user.has_permission("view_role")
+        is_own_role = request.user.role.id == role.id
+
+        if not has_view_permission and not is_own_role:
+            raise PermissionDenied("You do not have permission to view this role.")
+
+        serializer = self.get_serializer(role)
+
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        user_ids = request.data.get("user_ids")
+
+        if user_ids:
+            if str(request.user.id) in map(str, user_ids):
+                raise PermissionDenied("You cannot assign roles to yourself.")
+
+            superuser_ids = list(
+                User.objects.filter(id__in=user_ids, is_superuser=True).values_list(
+                    "id", flat=True
+                )
+            )
+            if superuser_ids:
+                raise PermissionDenied("Cannot assign roles to superusers.")
+
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            role = serializer.save()
+
+            all_permissions_count = Permission.count_all()
+            has_all_permissions = role.permissions.count() == all_permissions_count
+
+            if has_all_permissions and self.check_all_permissions_role_exists():
+                raise PermissionDenied("A role with all permissions already exists.")
+
+            if has_all_permissions and user_ids:
+                User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
+
+            return Response(
+                {
+                    "detail": "Role created successfully.",
+                    "role": self.get_serializer(role).data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        role = self.get_object()
+
+        is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
+        if is_own_role:
+            raise PermissionDenied("You cannot update your own role.")
+
+        user_ids = request.data.get("user_ids")
+        if user_ids:
+            if str(request.user.id) in map(str, user_ids):
+                raise PermissionDenied("You cannot assign roles to yourself.")
+
+            superuser_ids = list(
+                User.objects.filter(id__in=user_ids, is_superuser=True).values_list(
+                    "id", flat=True
+                )
+            )
+            if superuser_ids:
+                raise PermissionDenied("Cannot assign roles to superusers.")
+
+        serializer = self.get_serializer(role, data=request.data, partial=False)
+        if serializer.is_valid():
+            role = serializer.save()
+
+            all_permissions_count = Permission.count_all()
+            has_all_permissions = role.permissions.count() == all_permissions_count
+
+            if has_all_permissions and self.check_all_permissions_role_exists():
+                raise PermissionDenied("A role with all permissions already exists.")
+
+            if has_all_permissions:
+                if user_ids:
+                    User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
+                else:
+                    User.get_by_role(role).update(is_staff=True, is_superuser=True)
+
+            return Response(
+                {
+                    "detail": "Role updated successfully.",
+                    "role": self.get_serializer(role).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        role = self.get_object()
+
+        is_own_role = hasattr(request.user, "role") and request.user.role.id == role.id
+        if is_own_role:
+            raise PermissionDenied("You cannot delete your own role.")
+
+        role.delete()
+
+        return Response(
+            {"detail": "Role deleted successfully."}, status=status.HTTP_204_NO_CONTENT
+        )
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.select_related("role").all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        permissions = []
+
+        if self.action == "list":
+            permissions = [HasPermission(permission="view_user")]
+        elif self.action == "retrieve":
+            permissions = [IsAuthenticated()]
+
+        return permissions
+
+    def get_object(self):
+        try:
+            user = super().get_object()
+
+            return user
+        except Http404:
+            raise NotFound("User not found.")
+
+    def list(self, request, *args, **kwargs):
+        if request.user.is_superuser:
+            queryset = self.get_queryset().exclude(id=request.user.id)
+        else:
+            queryset = (
+                self.get_queryset()
+                .exclude(id=request.user.id)
+                .exclude(is_superuser=True)
+            )
+
+        serializer = self.get_serializer(queryset, many=True)
+
+        return Response(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        user = self.get_object()
+
+        if request.user.is_superuser:
+            serializer = self.get_serializer(user)
+
+            return Response(serializer.data)
+
+        if user.is_superuser and not request.user.is_superuser:
+            raise PermissionDenied("You do not have permission to view this user.")
+
+        has_view_permission = request.user.has_permission("view_user")
+        is_self = request.user.id == user.id
+
+        if not has_view_permission and not is_self:
+            raise PermissionDenied("You do not have permission to view this user.")
+
+        serializer = self.get_serializer(user)
+
+        return Response(serializer.data)
