@@ -223,9 +223,13 @@ class RoleSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+class SimpleRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ['id', 'name']
 
 class UserSerializer(serializers.ModelSerializer):
-    role = serializers.StringRelatedField()
+    role = SimpleRoleSerializer(read_only=True)
 
     class Meta:
         model = User
@@ -237,7 +241,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     role_id = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(), source='role', write_only=True, required=False, allow_null=True
     )
-    role = serializers.StringRelatedField(read_only=True) 
+    role = SimpleRoleSerializer(read_only=True)
 
     class Meta:
         model = User
@@ -284,7 +288,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     role_id = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(), source='role', write_only=True, required=False, allow_null=True
     )
-    role = serializers.StringRelatedField(read_only=True) 
+    role = SimpleRoleSerializer(read_only=True)
 
     class Meta:
         model = User

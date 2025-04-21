@@ -413,22 +413,47 @@ class UserViewSet(viewsets.ModelViewSet):
         return permission_classes
 
     def get_queryset(self):
-        queryset = super().get_queryset().order_by('name') 
+        queryset = super().get_queryset()
         user = self.request.user
 
         if self.action == 'list':
-             queryset = queryset.exclude(id=user.id)
+            queryset = queryset.exclude(id=user.id)
 
-        search_query = self.request.query_params.get('search', None)
+        # Filtering
+        search_query = self.request.query_params.get('search')
         if search_query:
             queryset = queryset.filter(
                 models.Q(name__icontains=search_query) |
                 models.Q(email__icontains=search_query)
-            ) 
+            )
 
-        role_id = self.request.query_params.get('role_id', None)
+        role_id = self.request.query_params.get('role_id')
         if role_id:
             queryset = queryset.filter(role_id=role_id)
+
+        role_isnull = self.request.query_params.get('role__isnull')
+        if role_isnull is not None:
+            if role_isnull.lower() == 'true':
+                queryset = queryset.filter(role__isnull=True)
+            elif role_isnull.lower() == 'false':
+                queryset = queryset.filter(role__isnull=False)
+
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+
+        email = self.request.query_params.get('email')
+        if email:
+            queryset = queryset.filter(email__icontains=email)
+
+        # Sorting
+        ordering = self.request.query_params.get('ordering')
+        if ordering:
+            # Example: ?ordering=role_id,-name
+            ordering_fields = [field.strip() for field in ordering.split(',')]
+            queryset = queryset.order_by(*ordering_fields)
+        else:
+            queryset = queryset.order_by('role_id', 'name')
 
         return queryset
 
@@ -438,6 +463,21 @@ class UserViewSet(viewsets.ModelViewSet):
             return user
         except Http404:
             raise NotFound("User not found.")
+        
+        
+    def list(self, request, *args, **kwargs):
+        user = request.user
+        queryset = self.get_queryset()
+        if user.is_superuser:
+            queryset = queryset.exclude(id=user.id)
+        else:
+            queryset = queryset.exclude(id=user.id).exclude(is_superuser=True)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
     def retrieve(self, request, *args, **kwargs):
@@ -445,7 +485,6 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if request.user.is_superuser:
             serializer = self.get_serializer(user)
-
             return Response(serializer.data)
 
         if user.is_superuser and not request.user.is_superuser:
@@ -457,14 +496,9 @@ class UserViewSet(viewsets.ModelViewSet):
         if not has_view_permission and not is_self:
             raise PermissionDenied("You do not have permission to view this user.")
 
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-
-        if getattr(instance, '_prefetched_objects_cache', None):
-            instance._prefetched_objects_cache = {} 
-
+        serializer = self.get_serializer(user)
         return Response(serializer.data)
+    
 
     def perform_update(self, serializer):
         serializer.save()
