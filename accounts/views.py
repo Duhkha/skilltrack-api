@@ -224,7 +224,13 @@ class PermissionListByGroupView(generics.ListAPIView):
         if not group:
             raise NotFound("Permission group not found.")
 
-        return group.get_permissions()
+        queryset = group.get_permissions()
+        search = self.request.query_params.get("search", "").strip().lower()
+
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset
 
 
 class PermissionDetailView(generics.RetrieveAPIView):
