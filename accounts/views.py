@@ -164,9 +164,44 @@ class SignOutView(APIView):
 
 
 class PermissionGroupListView(generics.ListAPIView):
-    queryset = PermissionGroup.get_all()
     serializer_class = PermissionGroupSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PermissionGroup.get_all().prefetch_related("permissions")
+
+    def list(self, request, *args, **kwargs):
+        search = request.query_params.get("search", "").strip().lower()
+        queryset = self.get_queryset()
+        result = []
+
+        for group in queryset:
+            group_name_match = search and search in group.name.lower()
+
+            matching_permissions = [
+                permission
+                for permission in group.permissions.all()
+                if search in permission.name.lower()
+            ]
+
+            if group_name_match:
+                serialized = self.get_serializer(group).data
+
+                result.append(serialized)
+            elif matching_permissions:
+                serialized = self.get_serializer(group).data
+                serialized["permissions"] = [
+                    {
+                        "id": permission.id,
+                        "name": permission.name,
+                        "description": permission.description,
+                    }
+                    for permission in matching_permissions
+                ]
+
+                result.append(serialized)
+
+        return Response(result)
 
 
 class PermissionListView(generics.ListAPIView):
