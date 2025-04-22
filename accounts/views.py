@@ -464,6 +464,26 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return permissions
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        if self.request.user.is_superuser:
+            queryset = queryset.exclude(id=self.request.user.id)
+        else:
+            queryset = queryset.exclude(id=self.request.user.id).exclude(
+                is_superuser=True
+            )
+
+        search = self.request.query_params.get("search", "").strip().lower()
+        if search:
+            queryset = queryset.filter(
+                models.Q(name__icontains=search)
+                | models.Q(email__icontains=search)
+                | models.Q(role__name__icontains=search)
+            )
+
+        return queryset
+
     def get_object(self):
         try:
             user = super().get_object()
@@ -473,15 +493,7 @@ class UserViewSet(viewsets.ModelViewSet):
             raise NotFound("User not found.")
 
     def list(self, request, *args, **kwargs):
-        if request.user.is_superuser:
-            queryset = self.get_queryset().exclude(id=request.user.id)
-        else:
-            queryset = (
-                self.get_queryset()
-                .exclude(id=request.user.id)
-                .exclude(is_superuser=True)
-            )
-
+        queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
 
         return Response(serializer.data)
