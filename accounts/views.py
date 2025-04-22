@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.views import APIView
+from rest_framework import filters
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from accounts.models import Permission, PermissionGroup, Role, User
@@ -172,6 +173,9 @@ class PermissionListView(generics.ListAPIView):
     queryset = Permission.get_all()
     serializer_class = PermissionSerializer
     permission_classes = [IsAuthenticated]
+
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name"]
 
 
 class PermissionListByGroupView(generics.ListAPIView):
