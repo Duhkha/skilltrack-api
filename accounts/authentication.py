@@ -21,3 +21,6 @@ class CookieJWTAuthentication(BaseAuthentication):
 
         except Exception as e:
             raise AuthenticationFailed("Authentication failed.")
+
+    def authenticate_header(self, request):
+        return 'Cookie realm="accessToken"'

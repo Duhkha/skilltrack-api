@@ -187,16 +187,17 @@ class Role(models.Model):
             group = permission.group
 
             group_entry = next(
-                (
-                    entry
-                    for entry in grouped_permissions
-                    if entry["group"] == group.name
-                ),
+                (entry for entry in grouped_permissions if entry["name"] == group.name),
                 None,
             )
 
             if not group_entry:
-                group_entry = {"id": group.id, "group": group.name, "permissions": []}
+                group_entry = {
+                    "id": group.id,
+                    "name": group.name,
+                    "description": group.description,
+                    "permissions": [],
+                }
                 grouped_permissions.append(group_entry)
 
             group_entry["permissions"].append(

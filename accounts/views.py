@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.http import Http404
+from django.db import models
 from rest_framework import generics, status, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
@@ -10,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.views import APIView
+from rest_framework import filters
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from accounts.models import Permission, PermissionGroup, Role, User
@@ -152,7 +154,9 @@ class SignOutView(APIView):
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get("refreshToken")
 
-        response = Response(status=status.HTTP_200_OK)
+        response = Response(
+            {"detail": "You have successfully signed out."}, status=status.HTTP_200_OK
+        )
 
         response.delete_cookie("accessToken")
         response.delete_cookie("refreshToken")
@@ -183,15 +187,53 @@ class ChangePasswordView(generics.GenericAPIView):
 
 
 class PermissionGroupListView(generics.ListAPIView):
-    queryset = PermissionGroup.get_all()
     serializer_class = PermissionGroupSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PermissionGroup.get_all().prefetch_related("permissions")
+
+    def list(self, request, *args, **kwargs):
+        search = request.query_params.get("search", "").strip().lower()
+        queryset = self.get_queryset()
+        result = []
+
+        for group in queryset:
+            group_name_match = search and search in group.name.lower()
+
+            matching_permissions = [
+                permission
+                for permission in group.permissions.all()
+                if search in permission.name.lower()
+            ]
+
+            if group_name_match:
+                serialized = self.get_serializer(group).data
+
+                result.append(serialized)
+            elif matching_permissions:
+                serialized = self.get_serializer(group).data
+                serialized["permissions"] = [
+                    {
+                        "id": permission.id,
+                        "name": permission.name,
+                        "description": permission.description,
+                    }
+                    for permission in matching_permissions
+                ]
+
+                result.append(serialized)
+
+        return Response(result)
 
 
 class PermissionListView(generics.ListAPIView):
     queryset = Permission.get_all()
     serializer_class = PermissionSerializer
     permission_classes = [IsAuthenticated]
+
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name"]
 
 
 class PermissionListByGroupView(generics.ListAPIView):
@@ -205,7 +247,13 @@ class PermissionListByGroupView(generics.ListAPIView):
         if not group:
             raise NotFound("Permission group not found.")
 
-        return group.get_permissions()
+        queryset = group.get_permissions()
+        search = self.request.query_params.get("search", "").strip().lower()
+
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset
 
 
 class PermissionDetailView(generics.RetrieveAPIView):
@@ -226,6 +274,15 @@ class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.get_all()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
+
+    def check_all_permissions_role_exists(self):
+        all_permissions_count = Permission.count_all()
+
+        roles_with_all_permissions = Role.objects.annotate(
+            permission_count=models.Count("permissions")
+        ).filter(permission_count=all_permissions_count)
+
+        return roles_with_all_permissions.exists()
 
     def get_permissions(self):
         permissions = []
@@ -319,11 +376,18 @@ class RoleViewSet(viewsets.ModelViewSet):
             all_permissions_count = Permission.count_all()
             has_all_permissions = role.permissions.count() == all_permissions_count
 
+            if has_all_permissions and self.check_all_permissions_role_exists():
+                raise PermissionDenied("A role with all permissions already exists.")
+
             if has_all_permissions and user_ids:
                 User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
 
             return Response(
-                self.get_serializer(role).data, status=status.HTTP_201_CREATED
+                {
+                    "detail": "Role created successfully.",
+                    "role": self.get_serializer(role).data,
+                },
+                status=status.HTTP_201_CREATED,
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -355,13 +419,22 @@ class RoleViewSet(viewsets.ModelViewSet):
             all_permissions_count = Permission.count_all()
             has_all_permissions = role.permissions.count() == all_permissions_count
 
+            if has_all_permissions and self.check_all_permissions_role_exists():
+                raise PermissionDenied("A role with all permissions already exists.")
+
             if has_all_permissions:
                 if user_ids:
                     User.get_by_ids(user_ids).update(is_staff=True, is_superuser=True)
                 else:
                     User.get_by_role(role).update(is_staff=True, is_superuser=True)
 
-            return Response(self.get_serializer(role).data)
+            return Response(
+                {
+                    "detail": "Role updated successfully.",
+                    "role": self.get_serializer(role).data,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -374,7 +447,10 @@ class RoleViewSet(viewsets.ModelViewSet):
 
         role.delete()
 
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"detail": "Role deleted successfully."}, status=status.HTTP_204_NO_CONTENT
+        )
+
 
 
 class CustomUserPagination(PageNumberPagination):
@@ -397,54 +473,39 @@ class UserViewSet(viewsets.ModelViewSet):
         return UserSerializer 
 
     def get_permissions(self):
-        permission_classes = [IsAuthenticated()]
+        permissions = [IsAuthenticated()]
         if self.action == 'list':
-            permission_classes.append(HasPermission(permission="view_user"))
+            permissions.append(HasPermission(permission="view_user"))
         elif self.action == 'retrieve':
             pass
         elif self.action == 'create':
-            permission_classes.append(HasPermission(permission="create_user"))
+            permissions.append(HasPermission(permission="create_user"))
         elif self.action in ['update', 'partial_update']:
-            permission_classes.append(HasPermission(permission="update_user"))
+            permissions.append(HasPermission(permission="update_user"))
         elif self.action == 'destroy':
-            permission_classes.append(HasPermission(permission="delete_user"))
+            permissions.append(HasPermission(permission="delete_user"))
         elif self.action == 'set_password':
-            permission_classes.append(HasPermission(permission="update_user"))
-        return permission_classes
+            permissions.append(HasPermission(permission="update_user"))
+        return permissions
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        user = self.request.user
 
-        if self.action == 'list':
-            queryset = queryset.exclude(id=user.id)
-
-        # Filtering
-        search_query = self.request.query_params.get('search')
-        if search_query:
-            queryset = queryset.filter(
-                models.Q(name__icontains=search_query) |
-                models.Q(email__icontains=search_query)
+        if self.request.user.is_superuser:
+            queryset = queryset.exclude(id=self.request.user.id)
+        else:
+            queryset = queryset.exclude(id=self.request.user.id).exclude(
+                is_superuser=True
             )
 
-        role_id = self.request.query_params.get('role_id')
-        if role_id:
-            queryset = queryset.filter(role_id=role_id)
-
-        role_isnull = self.request.query_params.get('role__isnull')
-        if role_isnull is not None:
-            if role_isnull.lower() == 'true':
-                queryset = queryset.filter(role__isnull=True)
-            elif role_isnull.lower() == 'false':
-                queryset = queryset.filter(role__isnull=False)
-
-        is_active = self.request.query_params.get('is_active')
-        if is_active is not None:
-            queryset = queryset.filter(is_active=is_active.lower() == 'true')
-
-        email = self.request.query_params.get('email')
-        if email:
-            queryset = queryset.filter(email__icontains=email)
+        # Filtering
+        search = self.request.query_params.get("search", "").strip().lower()
+        if search:
+            queryset = queryset.filter(
+                models.Q(name__icontains=search)
+                | models.Q(email__icontains=search)
+                | models.Q(role__name__icontains=search)
+            )
 
         # Sorting
         ordering = self.request.query_params.get('ordering')
@@ -466,12 +527,7 @@ class UserViewSet(viewsets.ModelViewSet):
         
         
     def list(self, request, *args, **kwargs):
-        user = request.user
         queryset = self.get_queryset()
-        if user.is_superuser:
-            queryset = queryset.exclude(id=user.id)
-        else:
-            queryset = queryset.exclude(id=user.id).exclude(is_superuser=True)
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
