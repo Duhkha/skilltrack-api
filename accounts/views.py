@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.views import APIView
+from rest_framework import filters
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from accounts.models import Permission, PermissionGroup, Role, User
@@ -163,15 +164,53 @@ class SignOutView(APIView):
 
 
 class PermissionGroupListView(generics.ListAPIView):
-    queryset = PermissionGroup.get_all()
     serializer_class = PermissionGroupSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PermissionGroup.get_all().prefetch_related("permissions")
+
+    def list(self, request, *args, **kwargs):
+        search = request.query_params.get("search", "").strip().lower()
+        queryset = self.get_queryset()
+        result = []
+
+        for group in queryset:
+            group_name_match = search and search in group.name.lower()
+
+            matching_permissions = [
+                permission
+                for permission in group.permissions.all()
+                if search in permission.name.lower()
+            ]
+
+            if group_name_match:
+                serialized = self.get_serializer(group).data
+
+                result.append(serialized)
+            elif matching_permissions:
+                serialized = self.get_serializer(group).data
+                serialized["permissions"] = [
+                    {
+                        "id": permission.id,
+                        "name": permission.name,
+                        "description": permission.description,
+                    }
+                    for permission in matching_permissions
+                ]
+
+                result.append(serialized)
+
+        return Response(result)
 
 
 class PermissionListView(generics.ListAPIView):
     queryset = Permission.get_all()
     serializer_class = PermissionSerializer
     permission_classes = [IsAuthenticated]
+
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name"]
 
 
 class PermissionListByGroupView(generics.ListAPIView):
@@ -185,7 +224,13 @@ class PermissionListByGroupView(generics.ListAPIView):
         if not group:
             raise NotFound("Permission group not found.")
 
-        return group.get_permissions()
+        queryset = group.get_permissions()
+        search = self.request.query_params.get("search", "").strip().lower()
+
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset
 
 
 class PermissionDetailView(generics.RetrieveAPIView):
@@ -284,6 +329,14 @@ class RoleViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(role)
 
+        has_view_permission = request.user.has_permission("view_role")
+        is_own_role = request.user.role.id == role.id
+
+        if not has_view_permission and not is_own_role:
+            raise PermissionDenied()
+
+        serializer = self.get_serializer(role)
+
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
@@ -335,6 +388,18 @@ class RoleViewSet(viewsets.ModelViewSet):
         if user_ids:
             if str(request.user.id) in map(str, user_ids):
                 raise PermissionDenied("You cannot assign roles to yourself.")
+
+            superuser_ids = list(
+                User.objects.filter(id__in=user_ids, is_superuser=True).values_list(
+                    "id", flat=True
+                )
+            )
+            if superuser_ids:
+                raise PermissionDenied("Cannot assign roles to superusers.")
+
+        user_ids = request.data.get("user_ids")
+        if user_ids and User.exists_in_ids([request.user.id]):
+            raise PermissionDenied("You cannot assign roles to yourself.")
 
             superuser_ids = list(
                 User.objects.filter(id__in=user_ids, is_superuser=True).values_list(
@@ -399,6 +464,26 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return permissions
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        if self.request.user.is_superuser:
+            queryset = queryset.exclude(id=self.request.user.id)
+        else:
+            queryset = queryset.exclude(id=self.request.user.id).exclude(
+                is_superuser=True
+            )
+
+        search = self.request.query_params.get("search", "").strip().lower()
+        if search:
+            queryset = queryset.filter(
+                models.Q(name__icontains=search)
+                | models.Q(email__icontains=search)
+                | models.Q(role__name__icontains=search)
+            )
+
+        return queryset
+
     def get_object(self):
         try:
             user = super().get_object()
@@ -408,15 +493,7 @@ class UserViewSet(viewsets.ModelViewSet):
             raise NotFound("User not found.")
 
     def list(self, request, *args, **kwargs):
-        if request.user.is_superuser:
-            queryset = self.get_queryset().exclude(id=request.user.id)
-        else:
-            queryset = (
-                self.get_queryset()
-                .exclude(id=request.user.id)
-                .exclude(is_superuser=True)
-            )
-
+        queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
 
         return Response(serializer.data)
