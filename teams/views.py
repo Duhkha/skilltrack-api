@@ -1,11 +1,12 @@
 from rest_framework import viewsets, permissions, status
-from .models import Team
-from .serializers import TeamSerializer, TeamDetailSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
-from accounts.permissions import HasPermission
 
+from .models import Team
+from .serializers import TeamSerializer, TeamDetailSerializer
+from accounts.permissions import HasPermission
+from accounts.models import User
 
 class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
@@ -29,14 +30,40 @@ class TeamViewSet(viewsets.ModelViewSet):
             permission_classes = [permissions.IsAuthenticated()]
         
         return permission_classes  
-
+    
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return TeamDetailSerializer
         return TeamSerializer
     
-    def perform_create(self, serializer):
-        serializer.save(team_lead=self.request.user)
+    def create(self, request, *args, **kwargs):
+        """Create a team with specified team lead and members by IDs"""
+        data = request.data.copy()
+        
+        # Set team_lead from ID or use current user
+        team_lead_id = data.get('team_lead')
+        try:
+            if team_lead_id:
+                team_lead = User.objects.get(id=team_lead_id)
+            else:
+                team_lead = request.user
+            data['team_lead'] = team_lead.id
+        except User.DoesNotExist:
+            return Response({'detail': 'Team lead user not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Handle members data separately
+        member_ids = data.pop('members', [])
+        
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        team = serializer.save(team_lead=team_lead)
+        
+        # Add members if provided
+        if member_ids:
+            existing_members = User.objects.filter(id__in=member_ids)
+            team.members.add(*existing_members)
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -45,17 +72,16 @@ class TeamViewSet(viewsets.ModelViewSet):
         # Admin can see all teams
         if user.is_superuser:
             pass
-        # Regular users with view_team permission can see all teams they belong to 
-        # or teams they lead
+        # Users with view_team permission can see their teams
         elif HasPermission(permission="view_team").has_permission(self.request, self):
             queryset = queryset.filter(
                 Q(members=user) | Q(team_lead=user)
             ).distinct()
-        # Users without view_team permission can only see teams they lead
+        # Others can only see teams they lead
         else:
             queryset = queryset.filter(team_lead=user)
         
-        # Filter by search param if provided
+        # Filter by search term if provided
         search = self.request.query_params.get('search', '').strip()
         if search:
             queryset = queryset.filter(
@@ -69,40 +95,25 @@ class TeamViewSet(viewsets.ModelViewSet):
         """Check if user has permission to manage this specific team"""
         user = self.request.user
         
-        # Admin can manage any team
-        if user.is_superuser:
-            return True
-        
-        # Team lead can always manage their team
-        if team.team_lead == user:
-            return True
-        
-        # Users with manage_team_members permission can only manage teams they belong to
-        if (HasPermission(permission="manage_team_members").has_permission(self.request, self) and
-            user in team.members.all()):
-            return True
-            
-        return False
+        return (user.is_superuser or 
+                team.team_lead == user or 
+                (HasPermission(permission="manage_team_members").has_permission(self.request, self) and 
+                 user in team.members.all()))
 
-    @action(detail=True, methods=['post'])
-    def add_member(self, request, pk=None):
+    @action(detail=True, methods=['post'], url_path='members/add/(?P<user_id>[^/.]+)')
+    def add_member(self, request, pk=None, user_id=None):
         """Add a user to the team"""
         team = self.get_object()
         
-        # Check if user can manage this team
         if not self.check_team_management_permission(team):
             return Response(
                 {'detail': 'You do not have permission to manage this team'},
                 status=status.HTTP_403_FORBIDDEN
             )
             
-        user_id = request.data.get('user_id')
-        
-        from accounts.models import User
         try:
             user = User.objects.get(id=user_id)
             
-            # Check if user is already a member
             if user in team.members.all():
                 return Response(
                     {'detail': f'User {user.name} is already a member of this team'},
@@ -114,32 +125,26 @@ class TeamViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=True, methods=['post'])
-    def remove_member(self, request, pk=None):
+    @action(detail=True, methods=['delete'], url_path='members/remove/(?P<user_id>[^/.]+)')
+    def remove_member(self, request, pk=None, user_id=None):
         """Remove a user from the team"""
         team = self.get_object()
         
-        # Check if user can manage this team
         if not self.check_team_management_permission(team):
             return Response(
                 {'detail': 'You do not have permission to manage this team'},
                 status=status.HTTP_403_FORBIDDEN
             )
             
-        user_id = request.data.get('user_id')
-        
-        from accounts.models import User
         try:
             user = User.objects.get(id=user_id)
             
-            # Cannot remove the team lead
             if user == team.team_lead:
                 return Response(
                     {'detail': 'Cannot remove team lead from team'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
-            # Check if user is actually a member
             if user not in team.members.all():
                 return Response(
                     {'detail': f'User {user.name} is not a member of this team'},
