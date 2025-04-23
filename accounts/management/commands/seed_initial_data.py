@@ -75,6 +75,49 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.SUCCESS(f"Created permission: {permission_name}")
                 )
+        
+        # Add Teams permission group
+        teams_group, created = PermissionGroup.objects.get_or_create(
+            name="teams",
+            defaults={"description": "Permissions related to team management."},
+        )
+        if created:
+            self.stdout.write(self.style.SUCCESS("Created permission group: teams"))
+
+        # Team permissions
+        team_permissions_data = [
+            (
+                "view_team",
+                "Permission to view teams, including listing all teams and retrieving individual team details.",
+            ),
+            (
+                "create_team",
+                "Permission to create a new team.",
+            ),
+            (
+                "update_team",
+                "Permission to update an existing team.",
+            ),
+            (
+                "delete_team",
+                "Permission to delete a team.",
+            ),
+            (
+                "manage_team_members",
+                "Permission to add or remove members from teams.",
+            ),
+        ]
+
+        for permission_name, description in team_permissions_data:
+            permission, created = Permission.objects.get_or_create(
+                group=teams_group,
+                name=permission_name,
+                defaults={"description": description},
+            )
+            if created:
+                self.stdout.write(
+                    self.style.SUCCESS(f"Created permission: {permission_name}")
+                )
 
         admin_role, created = Role.objects.get_or_create(name="admin")
         all_permissions = Permission.get_all()
