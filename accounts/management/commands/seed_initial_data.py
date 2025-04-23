@@ -1,3 +1,4 @@
+# filename: backend/accounts/management/commands/seed_initial_data.py
 from django.core.management.base import BaseCommand
 
 from accounts.models import Permission, PermissionGroup, Role, User
@@ -49,6 +50,18 @@ class Command(BaseCommand):
             (
                 "view_user",
                 "Permission to view users, including listing all users and retrieving individual user details.",
+            ),
+            (
+                "create_user",
+                "Permission to create a new user.",
+            ),
+            (
+                "update_user",
+                "Permission to update an existing user.",
+            ),
+            (
+                "delete_user",
+                "Permission to delete a user.",
             ),
         ]
 

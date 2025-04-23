@@ -1,7 +1,10 @@
 from django.conf import settings
+from django.db import models
 from django.http import Http404
 from django.db import models
 from rest_framework import generics, status, viewsets
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.decorators import action
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -20,6 +23,10 @@ from accounts.serializers import (
     PermissionSerializer,
     RoleSerializer,
     UserSerializer,
+    UserCreateSerializer,
+    UserSetPasswordSerializer,
+    UserUpdateSerializer,
+    ChangePasswordSerializer, 
 )
 from accounts.permissions import HasPermission
 
@@ -161,6 +168,22 @@ class SignOutView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return response
+
+
+class ChangePasswordView(generics.GenericAPIView):
+    serializer_class = ChangePasswordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+
+        if serializer.is_valid():
+            user.set_password(serializer.validated_data["new_password"])
+            user.save()
+            return Response({"detail": "Password updated successfully."}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PermissionGroupListView(generics.ListAPIView):
@@ -329,14 +352,6 @@ class RoleViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(role)
 
-        has_view_permission = request.user.has_permission("view_role")
-        is_own_role = request.user.role.id == role.id
-
-        if not has_view_permission and not is_own_role:
-            raise PermissionDenied()
-
-        serializer = self.get_serializer(role)
-
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
@@ -397,18 +412,6 @@ class RoleViewSet(viewsets.ModelViewSet):
             if superuser_ids:
                 raise PermissionDenied("Cannot assign roles to superusers.")
 
-        user_ids = request.data.get("user_ids")
-        if user_ids and User.exists_in_ids([request.user.id]):
-            raise PermissionDenied("You cannot assign roles to yourself.")
-
-            superuser_ids = list(
-                User.objects.filter(id__in=user_ids, is_superuser=True).values_list(
-                    "id", flat=True
-                )
-            )
-            if superuser_ids:
-                raise PermissionDenied("Cannot assign roles to superusers.")
-
         serializer = self.get_serializer(role, data=request.data, partial=False)
         if serializer.is_valid():
             role = serializer.save()
@@ -449,19 +452,40 @@ class RoleViewSet(viewsets.ModelViewSet):
         )
 
 
+
+class CustomUserPagination(PageNumberPagination):
+    page_size = 10  
+    page_size_query_param = 'page_size'  # Allow client to override, using ?page_size=xxx
+    max_page_size = 15  
+
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related("role").all()
-    serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
+    pagination_class = CustomUserPagination  
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return UserCreateSerializer
+        if self.action in ['update', 'partial_update']:
+            return UserUpdateSerializer
+        if self.action == 'set_password':
+            return UserSetPasswordSerializer
+        return UserSerializer 
 
     def get_permissions(self):
-        permissions = []
-
-        if self.action == "list":
-            permissions = [HasPermission(permission="view_user")]
-        elif self.action == "retrieve":
-            permissions = [IsAuthenticated()]
-
+        permissions = [IsAuthenticated()]
+        if self.action == 'list':
+            permissions.append(HasPermission(permission="view_user"))
+        elif self.action == 'retrieve':
+            pass
+        elif self.action == 'create':
+            permissions.append(HasPermission(permission="create_user"))
+        elif self.action in ['update', 'partial_update']:
+            permissions.append(HasPermission(permission="update_user"))
+        elif self.action == 'destroy':
+            permissions.append(HasPermission(permission="delete_user"))
+        elif self.action == 'set_password':
+            permissions.append(HasPermission(permission="update_user"))
         return permissions
 
     def get_queryset(self):
@@ -474,6 +498,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 is_superuser=True
             )
 
+        # Filtering
         search = self.request.query_params.get("search", "").strip().lower()
         if search:
             queryset = queryset.filter(
@@ -482,28 +507,40 @@ class UserViewSet(viewsets.ModelViewSet):
                 | models.Q(role__name__icontains=search)
             )
 
+        # Sorting
+        ordering = self.request.query_params.get('ordering')
+        if ordering:
+            # Example: ?ordering=role_id,-name
+            ordering_fields = [field.strip() for field in ordering.split(',')]
+            queryset = queryset.order_by(*ordering_fields)
+        else:
+            queryset = queryset.order_by('role_id', 'name')
+
         return queryset
 
     def get_object(self):
         try:
             user = super().get_object()
-
             return user
         except Http404:
             raise NotFound("User not found.")
-
+        
+        
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
-
         return Response(serializer.data)
+
 
     def retrieve(self, request, *args, **kwargs):
         user = self.get_object()
 
         if request.user.is_superuser:
             serializer = self.get_serializer(user)
-
             return Response(serializer.data)
 
         if user.is_superuser and not request.user.is_superuser:
@@ -516,5 +553,37 @@ class UserViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to view this user.")
 
         serializer = self.get_serializer(user)
-
         return Response(serializer.data)
+    
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.id == request.user.id:
+            raise PermissionDenied("Users cannot delete themselves.")
+        if instance.is_superuser:
+             raise PermissionDenied("Superusers cannot be deleted through the API.")
+
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def perform_destroy(self, instance):
+        instance.delete()
+
+    @action(detail=True, methods=['post'], url_path='set-password', permission_classes=[IsAuthenticated, HasPermission(permission="update_user")])
+    def set_password(self, request, pk=None):
+        user = self.get_object()
+
+        if user.id == request.user.id:
+            raise PermissionDenied("Use the dedicated password change functionality, not this endpoint.")
+        if user.is_superuser and not request.user.is_superuser:
+            raise PermissionDenied("You do not have permission to set password for a superuser.")
+
+        serializer = self.get_serializer(user, data=request.data) 
+        if serializer.is_valid():
+            serializer.save() 
+            return Response({'status': 'password set successfully'})
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

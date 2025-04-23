@@ -12,6 +12,7 @@ from accounts.views import (
     PermissionDetailView,
     RoleViewSet,
     UserViewSet,
+    ChangePasswordView,
 )
 
 router = DefaultRouter()
@@ -40,6 +41,7 @@ urlpatterns = [
         PermissionDetailView.as_view(),
         name="permission-detail",
     ),
+    path("auth/change-password/", ChangePasswordView.as_view(), name="change-password"),
 ]
 
 urlpatterns += router.urls

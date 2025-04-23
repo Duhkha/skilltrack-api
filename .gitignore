@@ -23,3 +23,5 @@ mediafiles/
 .vscode/
 *.DS_Store
 Thumbs.db
+
+note.txt
