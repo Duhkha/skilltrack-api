@@ -74,6 +74,18 @@ class TeamSerializer(serializers.ModelSerializer):
         
         return members
     
+    def validate(self, data):
+        """Validate that the team lead is not also included as a member"""
+        team_lead = data.get('team_lead')
+        members = data.get('members', [])
+        
+        if team_lead and team_lead in members:
+            raise serializers.ValidationError({
+                "member_ids": f"The team lead ({team_lead.name}) should not be included in the members list."
+            })
+        
+        return data
+    
     def create(self, validated_data):
         members_data = validated_data.pop('members', [])
         team = Team.objects.create(**validated_data)

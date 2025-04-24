@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
 
 from .models import Team
@@ -8,9 +9,15 @@ from .serializers import TeamSerializer, TeamDetailSerializer
 from accounts.permissions import HasPermission
 from accounts.models import User
 
+class TeamPagination(PageNumberPagination):
+    page_size = 1 # for testing purposes, set to 1 to see pagination in action
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
 class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
     serializer_class = TeamSerializer
+    pagination_class = TeamPagination
 
     def get_permissions(self):
         """
@@ -36,17 +43,28 @@ class TeamViewSet(viewsets.ModelViewSet):
             return TeamDetailSerializer
         return TeamSerializer
     
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
     def create(self, request, *args, **kwargs):
         """Create a team with specified team lead and members by IDs"""
         data = request.data.copy()
         
-        # Set team_lead from ID or use current user
-        team_lead_id = data.get('team_lead')
+        # Get team_lead from ID - require this value
+        team_lead_id = data.get('team_lead_id')
+        if not team_lead_id:
+            return Response({'detail': 'Team lead ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
         try:
-            if team_lead_id:
-                team_lead = User.objects.get(id=team_lead_id)
-            else:
-                team_lead = request.user
+            team_lead = User.objects.get(id=team_lead_id)
             data['team_lead'] = team_lead.id
         except User.DoesNotExist:
             return Response({'detail': 'Team lead user not found'}, status=status.HTTP_404_NOT_FOUND)
