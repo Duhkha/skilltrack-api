@@ -137,6 +137,34 @@ Once the backend is running, you can access the interactive Swagger UI to explor
 http://localhost:8000/swagger/
 ```
 
+## Running Tests
+
+The application includes unit and integration tests to ensure everything works as expected. You can run all tests or specific test modules using Django's built-in test runner within the Docker environment.
+
+### Run All Tests in the Project
+
+To run the full test suite, use the following command:
+
+```bash
+docker exec -it skillapp-backend python manage.py test
+```
+
+### Run Tests in a Specific App
+
+To run only the tests inside a specific Django app (e.g., authentication.sign_in):
+
+```bash
+docker exec -it skillapp-backend python manage.py test authentication.sign_in
+```
+
+### Run a Test in a Specific App
+
+To run a test inside a specific Django app (e.g., authentication.sign_in):
+
+```bash
+docker exec -it skillapp-backend python manage.py test authentication.sign_in.tests.SignInTests.test_email_blank
+```
+
 ## Code Formatting with `black`
 
 To ensure consistent code style, we use the `black` code formatter. This project already has `black` configured. This guide explains how to use the existing setup and how it works.
@@ -172,7 +200,7 @@ This will recursively format all Python files in the directory and its subdirect
 If you only want to format a specific file (e.g., urls.py), you can specify the path to that file:
 
 ```bash
-black ./accounts/urls.py
+black ./authentication/urls.py
 ```
 
 ### Current Black Configuration
