@@ -19,7 +19,8 @@ class UserBulkIngestSerializer(serializers.ModelSerializer):
             "required": "Email address is required.",
         },
     )
-    role = serializers.CharField(required=False)
+
+    role = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(read_only=True)
 
     class Meta:
@@ -28,6 +29,9 @@ class UserBulkIngestSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def validate_role(self, value):
+        if not value:
+            return None
+
         try:
             role = Role.objects.get(name=value)
         except Role.DoesNotExist:
